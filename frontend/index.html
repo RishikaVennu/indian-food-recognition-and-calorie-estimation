@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Indian Food Recognition AI</title>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Segoe UI;
+}
+
+body{
+background:linear-gradient(120deg,#ffecd2,#fcb69f);
+min-height:100vh;
+padding:30px;
+display:flex;
+justify-content:center;
+}
+
+.container{
+width:1000px;
+background:white;
+padding:30px;
+border-radius:20px;
+box-shadow:0 20px 40px rgba(0,0,0,0.2);
+}
+
+h1{
+text-align:center;
+color:#ff5722;
+margin-bottom:20px;
+}
+
+#dropContainer{
+border:3px dashed #ff5722;
+padding:50px;
+text-align:center;
+border-radius:15px;
+cursor:pointer;
+background:#fff5f2;
+margin-bottom:20px;
+}
+
+button{
+padding:12px 25px;
+border:none;
+background:#ff5722;
+color:white;
+border-radius:10px;
+cursor:pointer;
+margin:5px;
+font-weight:bold;
+}
+
+button:hover{
+background:#e64a19;
+}
+
+#previewContainer{
+position:relative;
+margin-top:20px;
+text-align:center;
+}
+
+#preview{
+max-width:100%;
+border-radius:15px;
+border:2px solid #ff5722;
+}
+
+#video{
+max-width:100%;
+border-radius:15px;
+border:2px solid #ff5722;
+}
+
+canvas{
+position:absolute;
+top:0;
+left:0;
+}
+
+.section{
+margin-top:30px;
+}
+
+.foodCard{
+background:#fff8f6;
+border-radius:15px;
+padding:15px;
+margin-top:15px;
+box-shadow:0 5px 10px rgba(0,0,0,0.1);
+}
+
+.nutritionGrid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:20px;
+margin-top:10px;
+}
+
+.nutritionBox{
+background:white;
+padding:15px;
+border-radius:10px;
+border:1px solid #eee;
+}
+
+.summaryBox{
+background:#fff0e8;
+padding:20px;
+border-radius:15px;
+margin-top:20px;
+}
+
+.healthBox{
+background:#e8f5e9;
+padding:20px;
+border-radius:15px;
+margin-top:20px;
+}
+
+.healthBox li{
+margin-top:5px;
+}
+
+.input-fields{
+display:flex;
+justify-content:center;
+flex-wrap:wrap;
+}
+
+.input-fields input{
+padding:10px;
+margin:10px;
+width:120px;
+border-radius:10px;
+border:1px solid #ccc;
+text-align:center;
+}
+
+#noFoodMessage{
+display:none;
+background:#ffe6e6;
+padding:20px;
+border-radius:15px;
+border:2px solid red;
+margin-top:20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Indian Food Recognition and Calorie Estimation</h1>
+
+<div id="dropContainer">
+Click or Drag Food Image
+<input type="file" id="imageInput" accept="image/*" style="display:none">
+</div>
+
+<button id="startCameraBtn">Use Camera</button>
+<button id="captureBtn" style="display:none">Capture</button>
+<button id="uploadBtn">Detect Food</button>
+
+<div id="previewContainer">
+
+<img id="preview" style="display:none">
+<video id="video" autoplay playsinline style="display:none"></video>
+<canvas id="canvas"></canvas>
+
+</div>
+
+<div id="noFoodMessage">
+
+<h3>⚠️ Unable to Detect Food</h3>
+
+<p>Try uploading a clearer image.</p>
+
+<ul>
+<li>Food must be visible</li>
+<li>Avoid blurry photos</li>
+<li>Ensure lighting is good</li>
+</ul>
+
+</div>
+
+<div id="detectionList"></div>
+
+<div id="summary" class="summaryBox" style="display:none">
+
+<h3>Meal Summary</h3>
+
+<p id="totalCal"></p>
+<p id="totalProtein"></p>
+<p id="totalCarbs"></p>
+<p id="totalFat"></p>
+
+</div>
+
+<div id="healthTips" class="healthBox" style="display:none">
+
+<h3>Health Suggestions</h3>
+
+<ul id="tipsList"></ul>
+
+</div>
+
+</div>
+
+<script>
+
+const dropContainer=document.getElementById("dropContainer")
+const imageInput=document.getElementById("imageInput")
+const preview=document.getElementById("preview")
+const video=document.getElementById("video")
+const canvas=document.getElementById("canvas")
+const ctx=canvas.getContext("2d")
+
+let selectedFile=null
+let cameraStream=null
+
+dropContainer.onclick=()=>imageInput.click()
+
+imageInput.onchange=e=>{
+selectedFile=e.target.files[0]
+loadPreview()
+}
+
+function loadPreview(){
+
+preview.style.display="block"
+video.style.display="none"
+
+preview.src=URL.createObjectURL(selectedFile)
+
+preview.onload=()=>{
+canvas.width=preview.width
+canvas.height=preview.height
+ctx.clearRect(0,0,canvas.width,canvas.height)
+}
+
+}
+
+document.getElementById("startCameraBtn").onclick=async()=>{
+
+video.style.display="block"
+preview.style.display="none"
+
+cameraStream=await navigator.mediaDevices.getUserMedia({video:true})
+video.srcObject=cameraStream
+
+document.getElementById("captureBtn").style.display="inline-block"
+
+}
+
+document.getElementById("captureBtn").onclick=()=>{
+
+canvas.width=video.videoWidth
+canvas.height=video.videoHeight
+
+ctx.drawImage(video,0,0)
+
+preview.src=canvas.toDataURL()
+
+preview.style.display="block"
+video.style.display="none"
+
+cameraStream.getTracks().forEach(t=>t.stop())
+
+}
+
+document.getElementById("uploadBtn").onclick=async()=>{
+
+if(!selectedFile && preview.style.display==="none"){
+alert("Upload image first")
+return
+}
+
+let fd=new FormData()
+
+if(selectedFile){
+
+fd.append("image",selectedFile)
+
+}else{
+
+let blob=await(await fetch(preview.src)).blob()
+fd.append("image",blob,"capture.png")
+
+}
+
+let res=await fetch("/predict",{method:"POST",body:fd})
+
+let data=await res.json()
+
+if(data.message==="no_food_detected"){
+
+document.getElementById("noFoodMessage").style.display="block"
+return
+
+}
+
+drawBoxes(data.foods)
+
+showFoods(data.foods)
+
+showSummary(data.summary)
+
+showTips(data.health_tips)
+
+}
+
+function drawBoxes(foods){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+foods.forEach(f=>{
+
+if(!f.box)return
+
+ctx.strokeStyle="red"
+ctx.lineWidth=3
+
+ctx.strokeRect(
+
+f.box[0]*canvas.width,
+f.box[1]*canvas.height,
+(f.box[2]-f.box[0])*canvas.width,
+(f.box[3]-f.box[1])*canvas.height
+
+)
+
+})
+
+}
+
+function showFoods(foods){
+
+let html="<h2>Detected Foods</h2>"
+
+foods.forEach(food=>{
+
+html+=`
+
+<div class="foodCard">
+
+<h3>${food.name}</h3>
+
+<div class="nutritionGrid">
+
+<div class="nutritionBox">
+
+<b>Estimated Portion</b><br><br>
+
+Portion : ${food.portion_g} g<br>
+Calories : ${food.portion_cal} kcal<br>
+Protein : ${food.portion_protein} g<br>
+Carbs : ${food.portion_carbs} g<br>
+Fat : ${food.portion_fat} g
+
+</div>
+
+<div class="nutritionBox">
+
+<b>Nutrition per 100g</b><br><br>
+
+Calories : ${food.per100_cal} kcal<br>
+Protein : ${food.per100_protein} g<br>
+Carbs : ${food.per100_carbs} g<br>
+Fat : ${food.per100_fat} g
+
+</div>
+
+</div>
+
+</div>
+
+`
+
+})
+
+document.getElementById("detectionList").innerHTML=html
+
+}
+
+function showSummary(summary){
+
+document.getElementById("summary").style.display="block"
+
+document.getElementById("totalCal").innerText="Calories : 
+"+summary.calories+" kcal"
+
+document.getElementById("totalProtein").innerText="Protein : 
+"+summary.protein+" g"
+
+document.getElementById("totalCarbs").innerText="Carbs : "+summary.carbs+" 
+g"
+
+document.getElementById("totalFat").innerText="Fat : "+summary.fat+" g"
+
+}
+
+function showTips(tips){
+
+document.getElementById("healthTips").style.display="block"
+
+let html=""
+
+tips.forEach(t=>{
+
+html+="<li>"+t+"</li>"
+
+})
+
+document.getElementById("tipsList").innerHTML=html
+
+}
+
+</script>
+
+</body>
+
+</html>
